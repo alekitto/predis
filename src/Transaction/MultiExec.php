@@ -35,6 +35,7 @@ class MultiExec implements ClientContextInterface
     private $state;
 
     protected $client;
+    protected $connection;
     protected $commands;
     protected $exceptions = true;
     protected $attempts = 0;
@@ -66,12 +67,6 @@ class MultiExec implements ClientContextInterface
      */
     private function assertClient(ClientInterface $client)
     {
-        if ($client->getConnection() instanceof AggregateConnectionInterface) {
-            throw new NotSupportedException(
-                'Cannot initialize a MULTI/EXEC transaction over aggregate connections.'
-            );
-        }
-
         if (!$client->getCommandFactory()->supports('MULTI', 'EXEC', 'DISCARD')) {
             throw new NotSupportedException(
                 'MULTI, EXEC and DISCARD are not supported by the current command factory.'
@@ -118,7 +113,7 @@ class MultiExec implements ClientContextInterface
     /**
      * Initializes the transaction context.
      */
-    protected function initialize()
+    protected function initialize(CommandInterface $command)
     {
         if ($this->state->isInitialized()) {
             return;
@@ -135,8 +130,15 @@ class MultiExec implements ClientContextInterface
         $cas = $this->state->isCAS();
         $discarded = $this->state->isDiscarded();
 
-        if (!$cas || ($cas && $discarded)) {
-            $this->call('MULTI');
+        if (!$cas || $discarded) {
+            $multi = $this->client->createCommand('MULTI');
+            $connection = $this->client->getConnection();
+            if ($connection instanceof AggregateConnectionInterface) {
+                $connection = $connection->getConnectionByCommand($command);
+            }
+
+            $this->connection = $connection;
+            $connection->executeCommand($multi);
 
             if ($discarded) {
                 $this->state->unflag(MultiExecState::CAS);
@@ -174,7 +176,7 @@ class MultiExec implements ClientContextInterface
      */
     protected function call($commandID, array $arguments = array())
     {
-        $response = $this->client->executeCommand(
+        $response = $this->connection->executeCommand(
             $this->client->createCommand($commandID, $arguments)
         );
 
@@ -197,13 +199,13 @@ class MultiExec implements ClientContextInterface
      */
     public function executeCommand(CommandInterface $command)
     {
-        $this->initialize();
+        $this->initialize($command);
 
         if ($this->state->isCAS()) {
             return $this->client->executeCommand($command);
         }
 
-        $response = $this->client->getConnection()->executeCommand($command);
+        $response = $this->connection->executeCommand($command);
 
         if ($response instanceof StatusResponse && $response == 'QUEUED') {
             $this->commands->enqueue($command);
@@ -252,8 +254,6 @@ class MultiExec implements ClientContextInterface
         if ($this->state->check(MultiExecState::INITIALIZED | MultiExecState::CAS)) {
             $this->state->unflag(MultiExecState::CAS);
             $this->call('MULTI');
-        } else {
-            $this->initialize();
         }
 
         return $this;

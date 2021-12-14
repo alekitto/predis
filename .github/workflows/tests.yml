@@ -17,6 +17,17 @@ jobs:
         - 6379:6379
         options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
+      redis-cluster:
+        image: grokzen/redis-cluster
+        ports:
+        - 7000:7000
+        - 7001:7001
+        - 7002:7002
+        - 7003:7003
+        - 7004:7004
+        - 7005:7005
+        options: --health-cmd="redis-cli -c -p 7000 ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
     strategy:
       fail-fast: false
       matrix:

@@ -14,6 +14,7 @@ namespace Predis\Transaction;
 use PHPUnit\Framework\MockObject\MockObject;
 use Predis\Client;
 use Predis\ClientInterface;
+use Predis\PredisException;
 use PredisTestCase;
 use Predis\Response;
 use Predis\Command\CommandInterface;
@@ -824,6 +825,48 @@ class MultiExecTest extends PredisTestCase
 
         $this->assertIsArray($responses);
         $this->assertSame(array(array('hijacked!', null)), $responses);
+    }
+
+    /**
+     * @group connected
+     * @requiresRedisCluster
+     */
+    public function testIntegrationThrowsExceptionOnRedisClusterIfKeySlotsAreDifferent(): void
+    {
+        $client = new Client(array(array('host' => '127.0.0.1', 'port' => 7000)), array('cluster' => 'redis'));
+        $exception = null;
+        $value = (string) rand();
+        $client->set('bar', $value);
+
+        try {
+            $client->transaction(function (MultiExec $tx) {
+                $tx->set('foo', 'bar');
+                $tx->set('bar', 'foobar');
+            });
+        } catch (PredisException $ex) {
+            $exception = $ex;
+        }
+
+        $this->assertInstanceOf('Predis\Transaction\AbortedMultiExecException', $exception);
+        $this->assertSame($value, $client->get('bar'));
+    }
+
+    /**
+     * @group connected
+     * @requiresRedisCluster
+     */
+    public function testIntegrationSetsOnRedisClusterIfKeySlotsAreEquals(): void
+    {
+        $client = new Client(array(array('host' => '127.0.0.1', 'port' => 7000)), array('cluster' => 'redis'));
+        $value = (string) rand();
+        $client->set('foo', 'xyz');
+
+        $client->transaction(function (MultiExec $tx) use ($value) {
+            $tx->set('foo', 'bar');
+            $tx->set('foo', $value);
+        });
+
+        $this->assertSame($value, $client->get('foo'));
     }
 
     // ******************************************************************** //

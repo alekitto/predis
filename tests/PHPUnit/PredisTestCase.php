@@ -20,6 +20,7 @@ use Predis\Connection;
 abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
 {
     protected $redisServerVersion = null;
+    protected $redisIsCluster = null;
 
     /**
      * {@inheritdoc}
@@ -27,6 +28,7 @@ abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
     protected function setUp(): void
     {
         $this->checkRequiredRedisServerVersion();
+        $this->checkRequiredRedisCluster();
     }
 
     /**
@@ -203,7 +205,7 @@ abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
         $client = new Client($parameters, $options);
         $client->connect();
 
-        if ($flushdb) {
+        if ($flushdb && !isset($options['cluster'])) {
             $client->flushdb();
         }
 
@@ -345,6 +347,25 @@ abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
     }
 
     /**
+     * Checks if the server is part of a cluster
+     *
+     * @return bool
+     */
+    public function isRedisCluster(): bool
+    {
+        if (isset($this->redisIsCluster)) {
+            return $this->redisIsCluster;
+        }
+
+        $client = new Client(array(array('host' => '127.0.0.1', 'port' => 7000)), array('cluster' => 'redis'));
+        $info = $client->cluster('INFO');
+
+        $this->redisIsCluster = isset($info['cluster_state']) && $info['cluster_state'] === 'ok';
+
+        return $this->redisIsCluster;
+    }
+
+    /**
      * Ensures the current Redis server matches version requirements for tests.
      *
      * Requirements are retrieved from the @requiresRedisVersion annotation that
@@ -375,6 +396,24 @@ abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
             $this->markTestSkipped(
                 "Test requires a Redis server instance $reqOperator $reqVersion but target server is $serverVersion"
             );
+        }
+    }
+
+    /**
+     * Ensures the current Redis server is part of a redis-cluster.
+     *
+     * @throws \PHPUnit\Framework\SkippedTestError When the required Redis server is not part of cluster
+     */
+    protected function checkRequiredRedisCluster(): void
+    {
+        $annotations = $this->getAnnotations();
+
+        if (isset($annotations['method']['requiresRedisCluster'], $annotations['method']['group']) &&
+            !empty($annotations['method']['requiresRedisCluster']) &&
+            in_array('connected', $annotations[ 'method' ][ 'group' ], true) &&
+            !$this->isRedisCluster()
+        ) {
+            $this->markTestSkipped('Test requires a Redis cluster instance');
         }
     }
 
