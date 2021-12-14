@@ -129,15 +129,14 @@ class MultiExec implements ClientContextInterface
 
         $cas = $this->state->isCAS();
         $discarded = $this->state->isDiscarded();
+        $connection = $this->client->getConnection();
+        if ($connection instanceof AggregateConnectionInterface) {
+            $connection = $connection->getConnectionByCommand($command);
+        }
 
+        $this->connection = $connection;
         if (!$cas || $discarded) {
             $multi = $this->client->createCommand('MULTI');
-            $connection = $this->client->getConnection();
-            if ($connection instanceof AggregateConnectionInterface) {
-                $connection = $connection->getConnectionByCommand($command);
-            }
-
-            $this->connection = $connection;
             $connection->executeCommand($multi);
 
             if ($discarded) {
@@ -176,9 +175,12 @@ class MultiExec implements ClientContextInterface
      */
     protected function call($commandID, array $arguments = array())
     {
-        $response = $this->connection->executeCommand(
-            $this->client->createCommand($commandID, $arguments)
-        );
+        $command = $this->client->createCommand($commandID, $arguments);
+        if ($this->connection !== null) {
+            $response = $this->connection->executeCommand($command);
+        } else {
+            $response = $this->client->executeCommand($command);
+        }
 
         if ($response instanceof ErrorResponseInterface) {
             throw new ServerException($response->getMessage());
