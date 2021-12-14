@@ -56,7 +56,11 @@ class CLUSTER extends RedisCommand
         $rows = explode("\n", $data);
         $result = [];
         foreach ($rows as $row) {
-            list($key, $value) = explode(':', $row, 2);
+            list($key, $value) = explode(':', $row, 2) + array(null, null);
+            if ($value === null) {
+                continue;
+            }
+
             $result[trim($key)] = trim($value);
         }
 
