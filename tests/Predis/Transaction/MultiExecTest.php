@@ -833,7 +833,7 @@ class MultiExecTest extends PredisTestCase
      */
     public function testIntegrationThrowsExceptionOnRedisClusterIfKeySlotsAreDifferent(): void
     {
-        $client = new Client(array(array('host' => '127.0.0.1', 'port' => 7000)), array('cluster' => 'redis'));
+        $client = $this->createClusterClient();
         $exception = null;
         $value = (string) rand();
         $client->set('bar', $value);
@@ -857,7 +857,7 @@ class MultiExecTest extends PredisTestCase
      */
     public function testIntegrationSetsOnRedisClusterIfKeySlotsAreEquals(): void
     {
-        $client = new Client(array(array('host' => '127.0.0.1', 'port' => 7000)), array('cluster' => 'redis'));
+        $client = $this->createClusterClient();
         $value = (string) rand();
         $client->set('foo', 'xyz');
 

@@ -19,6 +19,8 @@ jobs:
 
       redis-cluster:
         image: grokzen/redis-cluster
+        env:
+          IP: '0.0.0.0'
         ports:
         - 7000:7000
         - 7001:7001

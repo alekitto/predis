@@ -126,6 +126,22 @@ abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
     }
 
     /**
+     * Returns a named array with default values for connection parameters.
+     *
+     * @return array Default connection parameters
+     */
+    protected function getClusterDefaultParametersArray(): array
+    {
+        return array(
+            array(
+                'scheme' => 'tcp',
+                'host' => constant('REDIS_CLUSTER_HOST'),
+                'port' => constant('REDIS_CLUSTER_PORT'),
+            )
+        );
+    }
+
+    /**
      * Returns a named array with default values for client options.
      *
      * @return array Default connection parameters
@@ -180,7 +196,7 @@ abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
      * Returns a new instance of Predis\Client.
      *
      * Values in the optional $parameters named array are merged with defaults.
-     * Values in the ottional $options named array are merged with defaults.
+     * Values in the optional $options named array are merged with defaults.
      *
      * @param array $parameters Additional connection parameters
      * @param array $options    Additional client options
@@ -205,9 +221,42 @@ abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
         $client = new Client($parameters, $options);
         $client->connect();
 
-        if ($flushdb && !isset($options['cluster'])) {
+        if ($flushdb) {
             $client->flushdb();
         }
+
+        return $client;
+    }
+
+    /**
+     * Returns a new instance of Predis\Client for cluster connection.
+     *
+     * Values in the optional $parameters named array are merged with defaults.
+     * Values in the optional $options named array are merged with defaults.
+     *
+     * @param array $parameters Additional connection parameters
+     * @param array $options    Additional client options
+     * @param bool  $flushdb    Flush selected database before returning the client
+     *
+     * @return Client
+     */
+    protected function createClusterClient(?array $parameters = null, ?array $options = null): Client
+    {
+        $parameters = array_merge(
+            $this->getClusterDefaultParametersArray(),
+            $parameters ?: array()
+        );
+
+        $options = array_merge(
+            array(
+                'cluster' => 'redis',
+                'commands' => $this->getCommandFactory(),
+            ),
+            $options ?: array()
+        );
+
+        $client = new Client($parameters, $options);
+        $client->connect();
 
         return $client;
     }
@@ -357,7 +406,7 @@ abstract class PredisTestCase extends \PHPUnit\Framework\TestCase
             return $this->redisIsCluster;
         }
 
-        $client = new Client(array(array('host' => '127.0.0.1', 'port' => 7000)), array('cluster' => 'redis'));
+        $client = $this->createClusterClient();
         $info = $client->cluster('INFO');
 
         $this->redisIsCluster = isset($info['cluster_state']) && $info['cluster_state'] === 'ok';
