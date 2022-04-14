@@ -173,6 +173,9 @@ abstract class ClusterStrategy implements StrategyInterface
             'GEODIST' => $getKeyFromFirstArgument,
             'GEORADIUS' => array($this, 'getKeyFromGeoradiusCommands'),
             'GEORADIUSBYMEMBER' => array($this, 'getKeyFromGeoradiusCommands'),
+
+            /* echo */
+            'ECHO' => array($this, 'getRandomSlot'),
         );
     }
 
@@ -465,5 +468,10 @@ abstract class ClusterStrategy implements StrategyInterface
         }
 
         return $key;
+    }
+
+    public function getRandomSlot()
+    {
+        return mt_rand(0, 16384);
     }
 }

@@ -446,6 +446,9 @@ class PredisStrategyTest extends PredisTestCase
             'GEODIST' => 'keys-first',
             'GEORADIUS' => 'keys-georadius',
             'GEORADIUSBYMEMBER' => 'keys-georadius',
+
+            /* echo */
+            'ECHO' => 'random',
         );
 
         if (isset($type)) {

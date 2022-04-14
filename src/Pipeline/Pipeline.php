@@ -15,6 +15,8 @@ use Predis\ClientContextInterface;
 use Predis\ClientException;
 use Predis\ClientInterface;
 use Predis\Command\CommandInterface;
+use Predis\Connection\AggregateConnectionInterface;
+use Predis\Connection\Cluster\RedisCluster;
 use Predis\Connection\ConnectionInterface;
 use Predis\Connection\Replication\ReplicationInterface;
 use Predis\Response\ErrorInterface as ErrorResponseInterface;
@@ -113,6 +115,12 @@ class Pipeline implements ClientContextInterface
 
         if ($connection instanceof ReplicationInterface) {
             $connection->switchToMaster();
+        } elseif ($connection instanceof AggregateConnectionInterface && $this->pipeline->count() > 0) {
+            if ($connection instanceof RedisCluster && $connection->getSlotMap()->isEmpty()) {
+                $connection->askSlotMap();
+            }
+
+            $connection = $connection->getConnectionByCommand($this->pipeline->bottom());
         }
 
         return $connection;

@@ -411,6 +411,23 @@ class PipelineTest extends PredisTestCase
 
     /**
      * @group connected
+     * @requiresRedisCluster
+     */
+    public function testIntegrationWithFluentInterfaceAndCluster(): void
+    {
+        $pipeline = $this->createClusterClient()->pipeline();
+
+        $results = $pipeline
+            ->echo('one')
+            ->echo('two')
+            ->echo('three')
+            ->execute();
+
+        $this->assertSame(array('one', 'two', 'three'), $results);
+    }
+
+    /**
+     * @group connected
      */
     public function testIntegrationWithCallableBlock(): void
     {
@@ -428,10 +445,65 @@ class PipelineTest extends PredisTestCase
     /**
      * @group connected
      */
+    public function testIntegrationWithCallableBlockOnCluster(): void
+    {
+        $client = $this->createClusterClient();
+        $results = $client->pipeline(function (Pipeline $pipe) {
+            $pipe->set('foo', 'bar');
+            $pipe->get('foo');
+        });
+
+        $this->assertEquals(array('OK', 'bar'), $results);
+        $this->assertSame(1, $client->exists('foo'));
+    }
+
+    /**
+     * @group connected
+     */
+    public function testIntegrationWithCallableBlockOnClusterShouldThrowOnDifferentHashSlots(): void
+    {
+        $client = $this->createClusterClient();
+        $ex = null;
+
+        try {
+            $client->pipeline(function (Pipeline $pipe) {
+                $pipe->set('foo', 'bar');
+                $pipe->set('bar', 'foobar');
+            });
+        } catch (Response\ServerException $e) {
+            $ex = $e;
+        }
+
+        $this->assertInstanceOf('Predis\Response\ErrorInterface', $ex);
+        $this->assertSame(1, $client->exists('foo'));
+    }
+
+    /**
+     * @group connected
+     */
     public function testOutOfBandMessagesInsidePipeline(): void
     {
         $oob = null;
         $client = $this->getClient();
+
+        $results = $client->pipeline(function (Pipeline $pipe) use (&$oob) {
+            $pipe->set('foo', 'bar');
+            $oob = $pipe->getClient()->echo('oob message');
+            $pipe->get('foo');
+        });
+
+        $this->assertEquals(array('OK', 'bar'), $results);
+        $this->assertSame('oob message', $oob);
+        $this->assertSame(1, $client->exists('foo'));
+    }
+
+    /**
+     * @group connected
+     */
+    public function testOutOfBandMessagesInsidePipelineOnCluster(): void
+    {
+        $oob = null;
+        $client = $this->createClusterClient();
 
         $results = $client->pipeline(function (Pipeline $pipe) use (&$oob) {
             $pipe->set('foo', 'bar');
@@ -540,7 +612,7 @@ class PipelineTest extends PredisTestCase
                 throw new \InvalidArgumentException("Expected ECHO, got {$id}");
             }
 
-            list($echoed) = $command->getArguments();
+            [$echoed] = $command->getArguments();
 
             return $echoed;
         };
